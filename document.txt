@@ -1,2 +1,0 @@
-Hi, this is a test file to comit to the GIT.
-For now this works I made an update.
