@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Name Collector</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    form { margin-bottom: 20px; }
+    input[type="text"] { padding: 8px; width: 280px; }
+    button { padding: 8px 12px; margin-left: 6px; }
+    table { border-collapse: collapse; width: 420px; margin-top: 14px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { text-align: left; }
+    .row { display: flex; gap: 12px; align-items: center; }
+  </style>
+</head>
+<body>
+  <h1>Enter a name</h1>
+
+  <form method="POST" action="/">
+    <div class="row">
+      <input type="text" name="name" placeholder="Type a name..." required />
+      <button type="submit">Add</button>
+    </div>
+  </form>
+
+  <form method="POST" action="/reset" onsubmit="return confirm('Clear all names?');">
+    <button type="submit">Reset list</button>
+  </form>
+
+  <h2>Saved names</h2>
+
+  {% if entries %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>Added</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+          <tr>
+            <td>{{ e.id }}</td>
+            <td>{{ e.name }}</td>
+            <td>{{ e.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No names yet. Add one above.</p>
+  {% endif %}
+</body>
+</html>
