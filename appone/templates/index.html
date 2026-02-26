@@ -2,20 +2,22 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Name Collector</title>
+  <title>People</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; }
-    form { margin-bottom: 20px; }
     input[type="text"] { padding: 8px; width: 280px; }
     button { padding: 8px 12px; margin-left: 6px; }
-    table { border-collapse: collapse; width: 420px; margin-top: 14px; }
+    table { border-collapse: collapse; width: 700px; margin-top: 14px; }
     th, td { border: 1px solid #ddd; padding: 8px; }
     th { text-align: left; }
+    a { text-decoration: none; }
+    a:hover { text-decoration: underline; }
     .row { display: flex; gap: 12px; align-items: center; }
+    .muted { color: #666; font-size: 0.9em; }
   </style>
 </head>
 <body>
-  <h1>Enter a name</h1>
+  <h1>Add a person</h1>
 
   <form method="POST" action="/">
     <div class="row">
@@ -24,33 +26,43 @@
     </div>
   </form>
 
-  <form method="POST" action="/reset" onsubmit="return confirm('Clear all names?');">
+  <form method="POST" action="/reset" onsubmit="return confirm('Clear all people?');" style="margin-top:10px;">
     <button type="submit">Reset list</button>
   </form>
 
-  <h2>Saved names</h2>
+  <h2>People</h2>
 
-  {% if entries %}
+  {% if people %}
     <table>
       <thead>
         <tr>
-          <th>#</th>
-          <th>Name</th>
-          <th>Added</th>
+          <th>ID</th>
+          <th>Name (click)</th>
+          <th>Note preview</th>
+          <th>Created</th>
         </tr>
       </thead>
       <tbody>
-        {% for e in entries %}
+        {% for p in people %}
           <tr>
-            <td>{{ e.id }}</td>
-            <td>{{ e.name }}</td>
-            <td>{{ e.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+            <td>{{ p.id }}</td>
+            <td>
+              <a href="{{ url_for('person_detail', person_id=p.id) }}">{{ p.name }}</a>
+            </td>
+            <td class="muted">
+              {% if p.note %}
+                {{ (p.note[:80] ~ ('…' if p.note|length > 80 else '')) }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="muted">{{ p.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
   {% else %}
-    <p>No names yet. Add one above.</p>
+    <p>No people yet. Add one above.</p>
   {% endif %}
 </body>
 </html>
