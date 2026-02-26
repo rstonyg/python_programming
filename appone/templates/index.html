@@ -2,67 +2,151 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>People</title>
+  <title>Postage Reversals</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 40px; }
-    input[type="text"] { padding: 8px; width: 280px; }
-    button { padding: 8px 12px; margin-left: 6px; }
-    table { border-collapse: collapse; width: 700px; margin-top: 14px; }
-    th, td { border: 1px solid #ddd; padding: 8px; }
-    th { text-align: left; }
+    body { font-family: Arial, sans-serif; margin: 32px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    label { font-size: 12px; color: #444; display:block; margin-bottom: 4px; }
+    input, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+    textarea { min-height: 70px; }
+    button { padding: 10px 14px; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
+    th { text-align: left; background: #fafafa; }
     a { text-decoration: none; }
     a:hover { text-decoration: underline; }
-    .row { display: flex; gap: 12px; align-items: center; }
-    .muted { color: #666; font-size: 0.9em; }
+    .muted { color: #666; font-size: 12px; }
+    .flash { padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+    .flash.error { background: #ffecec; border: 1px solid #ffb8b8; }
+    .flash.ok { background: #ecffef; border: 1px solid #b8ffbf; }
+    .row-actions { display:flex; gap:8px; align-items:center; }
+    .danger { background: #fff3f3; border: 1px solid #ffb8b8; }
+    @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   </style>
 </head>
 <body>
-  <h1>Add a person</h1>
+  <h1>Postage Reversal Tracker</h1>
 
-  <form method="POST" action="/">
-    <div class="row">
-      <input type="text" name="name" placeholder="Type a name..." required />
-      <button type="submit">Add</button>
-    </div>
-  </form>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+        <div class="flash {{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
 
-  <form method="POST" action="/reset" onsubmit="return confirm('Clear all people?');" style="margin-top:10px;">
-    <button type="submit">Reset list</button>
-  </form>
+  <div class="card">
+    <h2 style="margin-top:0;">New request</h2>
+    <form method="POST" action="/">
+      <div class="grid">
+        <div>
+          <label>Date Requested</label>
+          <input type="date" name="date_requested" required />
+        </div>
+        <div>
+          <label>Requested By</label>
+          <input type="text" name="requested_by" required />
+        </div>
+        <div>
+          <label>Mailing Facility</label>
+          <input type="text" name="mailing_facility" required />
+        </div>
+        <div>
+          <label>Client</label>
+          <input type="text" name="client" required />
+        </div>
 
-  <h2>People</h2>
+        <div>
+          <label>Job Number</label>
+          <input type="text" name="job_number" required />
+        </div>
+        <div>
+          <label>Job Name</label>
+          <input type="text" name="job_name" required />
+        </div>
+        <div>
+          <label>Postage Statement ID</label>
+          <input type="text" name="postage_statement_id" required />
+        </div>
+        <div>
+          <label>Quantity</label>
+          <input type="number" name="quantity" min="1" step="1" required />
+        </div>
 
-  {% if people %}
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Name (click)</th>
-          <th>Note preview</th>
-          <th>Created</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in people %}
+        <div>
+          <label>Postage Amount</label>
+          <input type="text" name="postage_amount" placeholder="123.45" required />
+        </div>
+        <div style="grid-column: span 3;">
+          <label>Reason for the reversal</label>
+          <textarea name="reason" required></textarea>
+        </div>
+
+        <div style="grid-column: span 4;">
+          <label>Notes</label>
+          <textarea name="notes"></textarea>
+        </div>
+      </div>
+
+      <div style="margin-top: 10px;">
+        <button type="submit">Create request</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Requests</h2>
+
+    {% if reversals %}
+      <table>
+        <thead>
           <tr>
-            <td>{{ p.id }}</td>
-            <td>
-              <a href="{{ url_for('person_detail', person_id=p.id) }}">{{ p.name }}</a>
-            </td>
-            <td class="muted">
-              {% if p.note %}
-                {{ (p.note[:80] ~ ('…' if p.note|length > 80 else '')) }}
-              {% else %}
-                —
-              {% endif %}
-            </td>
-            <td class="muted">{{ p.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+            <th>ID</th>
+            <th>Date Requested</th>
+            <th>Client / Job</th>
+            <th>Statement / Qty</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th class="muted">Actions</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p>No people yet. Add one above.</p>
-  {% endif %}
+        </thead>
+        <tbody>
+          {% for r in reversals %}
+            <tr>
+              <td>{{ r.id }}</td>
+              <td>{{ r.date_requested.strftime("%Y-%m-%d") }}</td>
+              <td>
+                <div><strong>{{ r.client }}</strong></div>
+                <div>
+                  <a href="{{ url_for('reversal_detail', reversal_id=r.id) }}">
+                    {{ r.job_number }} — {{ r.job_name }}
+                  </a>
+                </div>
+                <div class="muted">{{ r.mailing_facility }} • Requested by {{ r.requested_by }}</div>
+              </td>
+              <td>
+                <div>{{ r.postage_statement_id }}</div>
+                <div class="muted">Qty: {{ r.quantity }}</div>
+              </td>
+              <td>${{ r.postage_amount }}</td>
+              <td><strong>{{ r.status }}</strong></td>
+              <td>
+                <div class="row-actions">
+                  <a href="{{ url_for('reversal_detail', reversal_id=r.id) }}">Open</a>
+                  <form method="POST" action="{{ url_for('delete_reversal', reversal_id=r.id) }}"
+                        onsubmit="return confirm('Delete request #{{ r.id }}?');" style="margin:0;">
+                    <button class="danger" type="submit">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No requests yet.</p>
+    {% endif %}
+  </div>
 </body>
 </html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Reversal #{{ rec.id }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-bottom: 18px; }
+    .muted { color: #666; font-size: 12px; }
+    label { font-size: 12px; color: #444; display:block; margin-bottom: 4px; }
+    select, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+    textarea { min-height: 120px; }
+    button { padding: 10px 14px; cursor: pointer; }
+    a { text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .flash { padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+    .flash.error { background: #ffecec; border: 1px solid #ffb8b8; }
+    .flash.ok { background: #ecffef; border: 1px solid #b8ffbf; }
+    table { border-collapse: collapse; width: 100%; }
+    td { padding: 6px; vertical-align: top; }
+    .k { width: 220px; color:#444; }
+  </style>
+</head>
+<body>
+  <p><a href="{{ url_for('index') }}">&larr; Back</a></p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+        <div class="flash {{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <h1>Reversal #{{ rec.id }}</h1>
+  <p class="muted">Created: {{ rec.created_at.strftime("%Y-%m-%d %H:%M:%S") }} • Updated: {{ rec.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Request details</h3>
+    <table>
+      <tr><td class="k">Date Requested</td><td>{{ rec.date_requested.strftime("%Y-%m-%d") }}</td></tr>
+      <tr><td class="k">Requested By</td><td>{{ rec.requested_by }}</td></tr>
+      <tr><td class="k">Mailing Facility</td><td>{{ rec.mailing_facility }}</td></tr>
+      <tr><td class="k">Client</td><td>{{ rec.client }}</td></tr>
+      <tr><td class="k">Job</td><td>{{ rec.job_number }} — {{ rec.job_name }}</td></tr>
+      <tr><td class="k">Postage Statement ID</td><td>{{ rec.postage_statement_id }}</td></tr>
+      <tr><td class="k">Quantity</td><td>{{ rec.quantity }}</td></tr>
+      <tr><td class="k">Postage Amount</td><td>${{ rec.postage_amount }}</td></tr>
+      <tr><td class="k">Reason</td><td>{{ rec.reason }}</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Update status / notes</h3>
+    <form method="POST">
+      <div style="margin-bottom:10px;">
+        <label>Status</label>
+        <select name="status" required>
+          {% for s in statuses %}
+            <option value="{{ s }}" {% if rec.status == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="margin-bottom:10px;">
+        <label>Notes</label>
+        <textarea name="notes" placeholder="Add any notes...">{{ rec.notes or "" }}</textarea>
+      </div>
+
+      <button type="submit">Save</button>
+    </form>
+  </div>
+</body>
+</html>
