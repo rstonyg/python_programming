@@ -1,12 +1,17 @@
 import os
-from flask import Flask
+from flask import Flask, jsonify
 
 app = Flask(__name__)
 
-@app.route("/")
+@app.get("/")
 def home():
-    return "Hello Tony. Your app is live."
+    return jsonify(status="ok", message="Hello from Flask on Render!")
+
+@app.get("/health")
+def health():
+    return jsonify(ok=True)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    # Local dev only. Render uses gunicorn to run the app.
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="127.0.0.1", port=port, debug=True)
