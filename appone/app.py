@@ -11,9 +11,10 @@ DB_PATH = os.path.join(BASE_DIR, "postage_reversals.db")
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
 
-# DB: uses DATABASE_URL if provided (Render Postgres), otherwise local SQLite file
+# Database: Render Postgres via DATABASE_URL, else local SQLite
 db_url = os.environ.get("DATABASE_URL")
 if db_url:
+    # Render sometimes uses postgres:// which SQLAlchemy doesn't like
     db_url = db_url.replace("postgres://", "postgresql://", 1)
     app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 else:
@@ -22,15 +23,7 @@ else:
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
-
-STATUS_OPTIONS = [
-    "Requested",
-    "Submitted",
-    "In Review",
-    "Approved",
-    "Rejected",
-    "Completed",
-]
+STATUS_OPTIONS = ["Requested", "Submitted", "In Review", "Approved", "Rejected", "Completed"]
 
 
 class PostageReversal(db.Model):
@@ -39,7 +32,6 @@ class PostageReversal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     date_requested = db.Column(db.Date, nullable=False)
-
     requested_by = db.Column(db.String(120), nullable=False)
     mailing_facility = db.Column(db.String(120), nullable=False)
 
@@ -50,7 +42,7 @@ class PostageReversal(db.Model):
     postage_statement_id = db.Column(db.String(120), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
 
-    # store cents accurately as integer
+    # store money as cents (integer) to avoid float issues
     postage_amount_cents = db.Column(db.Integer, nullable=False)
 
     reason = db.Column(db.Text, nullable=False)
@@ -66,7 +58,6 @@ class PostageReversal(db.Model):
 
     @property
     def postage_amount(self) -> str:
-        # display dollars
         dollars = Decimal(self.postage_amount_cents) / Decimal(100)
         return f"{dollars:,.2f}"
 
@@ -83,7 +74,10 @@ def parse_date(value: str) -> date | None:
 
 
 def parse_money_to_cents(value: str) -> int | None:
-    # Accept "123.45" or "$123.45" or "1,234.56"
+    """
+    Accepts: 123.45, $123.45, 1,234.56
+    Returns cents as int or None if invalid.
+    """
     if not value:
         return None
     cleaned = value.strip().replace("$", "").replace(",", "")
@@ -91,33 +85,42 @@ def parse_money_to_cents(value: str) -> int | None:
         amt = Decimal(cleaned)
         if amt < 0:
             return None
-        cents = int((amt * 100).quantize(Decimal("1")))
-        return cents
+        return int((amt * 100).quantize(Decimal("1")))
     except (InvalidOperation, ValueError):
+        return None
+
+
+def parse_positive_int(value: str) -> int | None:
+    try:
+        n = int((value or "").strip())
+        if n <= 0:
+            return None
+        return n
+    except Exception:
         return None
 
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+    # Create a new request
     if request.method == "POST":
-        # Create a new reversal request
-        date_requested = parse_date(request.form.get("date_requested", ""))
-        requested_by = (request.form.get("requested_by") or "").strip()
-        mailing_facility = (request.form.get("mailing_facility") or "").strip()
-        client = (request.form.get("client") or "").strip()
-        job_number = (request.form.get("job_number") or "").strip()
-        job_name = (request.form.get("job_name") or "").strip()
-        postage_statement_id = (request.form.get("postage_statement_id") or "").strip()
-        reason = (request.form.get("reason") or "").strip()
-        notes = (request.form.get("notes") or "").strip()
+        form = request.form
 
-        qty_raw = (request.form.get("quantity") or "").strip()
-        amount_raw = (request.form.get("postage_amount") or "").strip()
+        date_requested = parse_date(form.get("date_requested", ""))
+        requested_by = (form.get("requested_by") or "").strip()
+        mailing_facility = (form.get("mailing_facility") or "").strip()
+        client = (form.get("client") or "").strip()
+        job_number = (form.get("job_number") or "").strip()
+        job_name = (form.get("job_name") or "").strip()
+        postage_statement_id = (form.get("postage_statement_id") or "").strip()
+        quantity = parse_positive_int(form.get("quantity"))
+        cents = parse_money_to_cents(form.get("postage_amount") or "")
+        reason = (form.get("reason") or "").strip()
+        notes = (form.get("notes") or "").strip()
 
-        # Validate required fields
         errors = []
         if not date_requested:
-            errors.append("Date Requested is required (YYYY-MM-DD).")
+            errors.append("Date Requested is required.")
         if not requested_by:
             errors.append("Requested By is required.")
         if not mailing_facility:
@@ -130,25 +133,16 @@ def index():
             errors.append("Job Name is required.")
         if not postage_statement_id:
             errors.append("Postage Statement ID is required.")
-        if not reason:
-            errors.append("Reason is required.")
-
-        try:
-            quantity = int(qty_raw)
-            if quantity <= 0:
-                raise ValueError
-        except Exception:
+        if quantity is None:
             errors.append("Quantity must be a positive whole number.")
-            quantity = 0
-
-        cents = parse_money_to_cents(amount_raw)
         if cents is None:
             errors.append("Postage Amount must be a valid number like 123.45.")
+        if not reason:
+            errors.append("Reason for the reversal is required.")
 
         if errors:
             for e in errors:
-                flash(e, "error")
-            # fall through to GET rendering with current list
+                flash(e, "danger")
         else:
             rec = PostageReversal(
                 date_requested=date_requested,
@@ -166,6 +160,7 @@ def index():
             )
             db.session.add(rec)
             db.session.commit()
+            flash(f"Created reversal request #{rec.id}.", "success")
             return redirect(url_for("index"))
 
     reversals = PostageReversal.query.order_by(PostageReversal.created_at.desc()).all()
@@ -179,18 +174,65 @@ def reversal_detail(reversal_id: int):
         abort(404)
 
     if request.method == "POST":
-        # Update status + notes (and optionally other fields)
-        status = (request.form.get("status") or "").strip()
-        notes = (request.form.get("notes") or "").strip()
+        form = request.form
 
+        date_requested = parse_date(form.get("date_requested", ""))
+        requested_by = (form.get("requested_by") or "").strip()
+        mailing_facility = (form.get("mailing_facility") or "").strip()
+        client = (form.get("client") or "").strip()
+        job_number = (form.get("job_number") or "").strip()
+        job_name = (form.get("job_name") or "").strip()
+        postage_statement_id = (form.get("postage_statement_id") or "").strip()
+        quantity = parse_positive_int(form.get("quantity"))
+        cents = parse_money_to_cents(form.get("postage_amount") or "")
+        reason = (form.get("reason") or "").strip()
+        notes = (form.get("notes") or "").strip()
+        status = (form.get("status") or "").strip()
+
+        errors = []
+        if not date_requested:
+            errors.append("Date Requested is required.")
+        if not requested_by:
+            errors.append("Requested By is required.")
+        if not mailing_facility:
+            errors.append("Mailing Facility is required.")
+        if not client:
+            errors.append("Client is required.")
+        if not job_number:
+            errors.append("Job Number is required.")
+        if not job_name:
+            errors.append("Job Name is required.")
+        if not postage_statement_id:
+            errors.append("Postage Statement ID is required.")
+        if quantity is None:
+            errors.append("Quantity must be a positive whole number.")
+        if cents is None:
+            errors.append("Postage Amount must be a valid number like 123.45.")
+        if not reason:
+            errors.append("Reason for the reversal is required.")
         if status not in STATUS_OPTIONS:
-            flash("Invalid status.", "error")
+            errors.append("Status is invalid.")
+
+        if errors:
+            for e in errors:
+                flash(e, "danger")
         else:
-            rec.status = status
+            rec.date_requested = date_requested
+            rec.requested_by = requested_by
+            rec.mailing_facility = mailing_facility
+            rec.client = client
+            rec.job_number = job_number
+            rec.job_name = job_name
+            rec.postage_statement_id = postage_statement_id
+            rec.quantity = quantity
+            rec.postage_amount_cents = cents
+            rec.reason = reason
             rec.notes = notes if notes else None
+            rec.status = status
             rec.touch()
+
             db.session.commit()
-            flash("Updated.", "ok")
+            flash("Saved changes.", "success")
             return redirect(url_for("reversal_detail", reversal_id=rec.id))
 
     return render_template("reversal.html", rec=rec, statuses=STATUS_OPTIONS)
@@ -203,6 +245,7 @@ def delete_reversal(reversal_id: int):
         abort(404)
     db.session.delete(rec)
     db.session.commit()
+    flash(f"Deleted reversal request #{reversal_id}.", "warning")
     return redirect(url_for("index"))
 
 
